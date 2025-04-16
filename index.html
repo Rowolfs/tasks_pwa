@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <title>Умный список задач</title>
+</head>
+<body>
+  <div id="app">
+    <h1>Задачи</h1>
+    <div class="filters">
+      <button onclick="setFilter('all')">Все</button>
+      <button onclick="setFilter('active')">Активные</button>
+      <button onclick="setFilter('completed')">Выполненные</button>
+      <button onclick="toggleNotifications()" id="notifBtn">Включить уведомления</button>
+    </div>
+
+    <input id="taskInput" placeholder="Новая задача...">
+    <button onclick="addTask()">Добавить</button>
+
+    <ul id="taskList"></ul>
+  </div>
+
+  <script>
+    let tasks = JSON.parse(localStorage.getItem('tasks') || '[]');
+    let currentFilter = 'all';
+    let notificationsEnabled = false;
+
+    const taskListEl = document.getElementById('taskList');
+
+    function saveTasks() {
+      localStorage.setItem('tasks', JSON.stringify(tasks));
+    }
+
+    function renderTasks() {
+      taskListEl.innerHTML = '';
+      const filtered = tasks.filter(task => {
+        if (currentFilter === 'active') return !task.completed;
+        if (currentFilter === 'completed') return task.completed;
+        return true;
+      });
+
+      filtered.forEach((task, index) => {
+        const li = document.createElement('li');
+        li.textContent = task.text;
+        li.style.textDecoration = task.completed ? 'line-through' : 'none';
+        li.onclick = () => toggleTask(index);
+        taskListEl.appendChild(li);
+      });
+    }
+
+    function addTask() {
+      const input = document.getElementById('taskInput');
+      const text = input.value.trim();
+      if (!text) return;
+      const task = { text, completed: false };
+      tasks.push(task);
+      saveTasks();
+      renderTasks();
+      input.value = '';
+
+      if (notificationsEnabled && 'Notification' in window) {
+        new Notification("Добавлена новая задача", { body: text });
+      }
+    }
+
+    function toggleTask(index) {
+      tasks[index].completed = !tasks[index].completed;
+      saveTasks();
+      renderTasks();
+
+      if (notificationsEnabled && tasks[index].completed) {
+        new Notification("Задача выполнена", { body: tasks[index].text });
+      }
+    }
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      renderTasks();
+    }
+
+    function toggleNotifications() {
+      if (!('Notification' in window)) {
+        alert('Браузер не поддерживает уведомления.');
+        return;
+      }
+      Notification.requestPermission().then(permission => {
+        notificationsEnabled = (permission === 'granted');
+        document.getElementById('notifBtn').textContent = notificationsEnabled ? 'Отключить уведомления' : 'Включить уведомления';
+        if (notificationsEnabled) {
+          new Notification("Уведомления включены", { body: "Теперь вы будете получать напоминания." });
+        }
+      });
+    }
+
+    setInterval(() => {
+      const active = tasks.some(task => !task.completed);
+      if (active && notificationsEnabled) {
+        new Notification("Напоминание", { body: "У вас есть невыполненные задачи." });
+      }
+    }, 2 * 60 * 60 * 1000); // каждые 2 часа
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(() => console.log('Service Worker зарегистрирован'))
+        .catch(err => console.error('Ошибка регистрации SW:', err));
+    }
+
+    renderTasks();
+  </script>
+</body>
+</html>
